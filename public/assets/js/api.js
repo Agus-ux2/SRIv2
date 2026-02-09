@@ -3,14 +3,11 @@
  * API WRAPPER - Centraliza todas las llamadas HTTP
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  * 
- * Responsabilidades:
- * - Agregar headers de autenticación automáticamente
- * - Manejar errores 401/403 (redirect a login)
- * - Parsear respuestas JSON
- * - Logging centralizado de errores
+ * FIXED: Removed /api prefix to work with CloudFront
  */
 
-const API_BASE_URL = '/api';
+// ✅ CORREGIDO: Sin /api, usa rutas directas
+const API_BASE_URL = '';
 
 class API {
   /**
@@ -63,7 +60,7 @@ class API {
 
     // Error HTTP
     if (!response.ok) {
-      const error = new Error(data.message || `Error HTTP ${response.status}`);
+      const error = new Error(data.message || data.error || `Error HTTP ${response.status}`);
       error.status = response.status;
       error.data = data;
       throw error;
