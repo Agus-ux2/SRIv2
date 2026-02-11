@@ -1,0 +1,46 @@
+{
+    "FunctionName": "sri-settlements-quality-test",
+    "FunctionArn": "arn:aws:lambda:us-east-2:248825820462:function:sri-settlements-quality-test",
+    "Runtime": "nodejs18.x",
+    "Role": "arn:aws:iam::248825820462:role/sri-lambda-role",
+    "Handler": "index.handler",
+    "CodeSize": 1065,
+    "Description": "",
+    "Timeout": 30,
+    "MemorySize": 512,
+    "LastModified": "2026-02-11T13:27:30.000+0000",
+    "CodeSha256": "LxtZoJd5eWhAptWSJx2zPRzkNsG0iJcYMo8RzySNGOI=",
+    "Version": "$LATEST",
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "0a8a2528-7779-4fcb-966c-a614a32ce6c7",
+    "Layers": [
+        {
+            "Arn": "arn:aws:lambda:us-east-2:248825820462:layer:quality-engine:2",
+            "CodeSize": 8172503
+        }
+    ],
+    "State": "Active",
+    "LastUpdateStatus": "InProgress",
+    "LastUpdateStatusReason": "The function is being created.",
+    "LastUpdateStatusReasonCode": "Creating",
+    "PackageType": "Zip",
+    "Architectures": [
+        "x86_64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:us-east-2::runtime:9a9659568bf79d197303268f6f12daf1b07196863769ffdfec56057ebf0b0553"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/sri-settlements-quality-test"
+    }
+}

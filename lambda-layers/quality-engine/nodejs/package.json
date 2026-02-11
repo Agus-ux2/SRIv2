@@ -1,0 +1,9 @@
+{
+  "name": "quality-engine-layer",
+  "version": "1.0.0",
+  "description": "Motor de calidad de granos + Parser + 523 valores oficiales",
+  "main": "index.js",
+  "dependencies": {
+    "pdf-parse": "^1.1.1"
+  }
+}
