@@ -65,8 +65,8 @@ const parseCondiciones = (text) => {
 };
 
 const parseOperacion = (text) => {
-  // "59361 Kg$218.09$12946250.3010.5$1359356.28$14305606.58"
-  const op_m  = text.match(/([\d,]+)\s*Kg\$([\d.]+)\$([\d.,]+?)(10\.5|10,5)\$([\d.,]+)\$([\d.,]+)/);
+  // "59361 Kg$218.09$12946250.3010.5$1359356.28$14305606.58
+  const op_m  = text.match(/([\d,]+)\s*Kg\s*\$\s*([\d.]+)\s*\$\s*([\d.,]+?)\s*(10\.5|10,5)\s*\$\s*([\d.,]+)\s*\$\s*([\d.,]+)/);
   // "$ 0.00Total Deducciones:" → valor ANTES del label
   const ded_m = text.match(/\$\s*([\d.,]+)Total Deducciones:/i);
   // "Total Percepciones:$ 0.00"
