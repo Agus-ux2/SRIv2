@@ -1,35 +1,78 @@
-const { Pool } = require('pg');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { randomUUID } = require('crypto');
 
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: 5432,
-  ssl: { rejectUnauthorized: false }
-});
+const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-2' });
+const BUCKET = process.env.S3_BUCKET || 'sri-settlements-248825820462';
 
 exports.handler = async (event) => {
   const headers = {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*'
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
+
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
+  }
+
   try {
     const body = JSON.parse(event.body || '{}');
-    const grain_type = body.grain_type;
-    const company_id = body.company_id;
-    if (!grain_type || !company_id) {
-      return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'Missing: grain_type, company_id' }) };
+    const pdfs = body.pdfs;
+
+    if (!Array.isArray(pdfs) || pdfs.length === 0) {
+      return {
+        statusCode: 400, headers,
+        body: JSON.stringify({ success: false, error: 'Se requiere array pdfs con al menos un elemento' })
+      };
     }
-    const id = randomUUID();
-    const result = await pool.query(
-      'INSERT INTO settlements (id, grain_type, total_gross_kg, total_net_kg, total_waste_kg, company_id, settlement_number, settlement_date, base_price_per_ton, gross_amount, commercial_discount, commission_amount, paritarias_amount, freight_amount, net_amount, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW(),NOW()) RETURNING id, settlement_number, grain_type, total_gross_kg, company_id, status, created_at',
-      [id, grain_type, body.total_gross_kg||0, body.total_net_kg||0, body.total_waste_kg||0, company_id, body.settlement_number||('SRI-'+Date.now()), body.settlement_date||new Date().toISOString().split('T')[0], body.base_price_per_ton||0, body.gross_amount||0, body.commercial_discount||0, body.commission_amount||0, body.paritarias_amount||0, body.freight_amount||0, body.net_amount||0, 'pending']
-    );
-    return { statusCode: 201, headers, body: JSON.stringify({ success: true, data: result.rows[0] }) };
+
+    const batchId = randomUUID();
+    const resultados = [];
+
+    for (const pdf of pdfs) {
+      const { filename, data } = pdf;
+      if (!filename || !data) {
+        resultados.push({ filename: filename || 'unknown', success: false, error: 'Falta filename o data' });
+        continue;
+      }
+
+      try {
+        const buffer = Buffer.from(data, 'base64');
+        const key = `uploads/${batchId}/${filename}`;
+
+        await s3.send(new PutObjectCommand({
+          Bucket: BUCKET,
+          Key: key,
+          Body: buffer,
+          ContentType: 'application/pdf',
+          Metadata: { originalname: filename, batchid: batchId },
+        }));
+
+        resultados.push({ filename, success: true, key, bucket: BUCKET });
+      } catch (err) {
+        resultados.push({ filename, success: false, error: err.message });
+      }
+    }
+
+    const ok     = resultados.filter(r => r.success).length;
+    const failed = resultados.filter(r => !r.success).length;
+
+    return {
+      statusCode: 200, headers,
+      body: JSON.stringify({
+        success: true,
+        batchId,
+        resumen: { total: pdfs.length, subidos: ok, errores: failed },
+        resultados,
+      })
+    };
+
   } catch (err) {
     console.error('Error:', err);
-    return { statusCode: 500, headers, body: JSON.stringify({ success: false, error: err.message }) };
+    return {
+      statusCode: 500, headers,
+      body: JSON.stringify({ success: false, error: err.message })
+    };
   }
 };
