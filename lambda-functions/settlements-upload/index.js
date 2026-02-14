@@ -1,41 +1,35 @@
-const { QualityService } = require('/opt/nodejs/quality/quality.service');
+const { Pool } = require('pg');
+const { randomUUID } = require('crypto');
+
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: 5432,
+  ssl: { rejectUnauthorized: false }
+});
 
 exports.handler = async (event) => {
+  const headers = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*'
+  };
   try {
-    const qualityService = new QualityService();
-    const results = {};
-
-    // Test todos los granos
-    const tests = [
-      { grain_type: 'soja',    foreign_matter: 1.5, damaged_grains: 4.0, green_grains: 0.3, humidity: 15.0 },
-      { grain_type: 'trigo',   foreign_matter: 1.2, damaged_grains: 2.5, broken_grains: 1.5, humidity: 15.5 },
-      { grain_type: 'maiz',    foreign_matter: 1.8, damaged_grains: 3.5, broken_grains: 2.5, humidity: 16.0 },
-      { grain_type: 'sorgo',   foreign_matter: 2.5, damaged_grains: 4.0, broken_grains: 3.0, humidity: 17.0 },
-      { grain_type: 'girasol', foreign_matter: 1.2, damaged_grains: 3.0, empty_grains: 4.0, humidity: 12.0 }
-    ];
-
-    for (const analysis of tests) {
-      const result = qualityService.calculateQuality(analysis, 25000, 350000);
-      results[analysis.grain_type] = {
-        factor: result.final_factor,
-        grade: result.grade,
-        discount: result.total_discount,
-        waste_kg: result.humidity_waste.waste_kg,
-        net_kg: result.humidity_waste.net_quantity_kg
-      };
+    const body = JSON.parse(event.body || '{}');
+    const grain_type = body.grain_type;
+    const company_id = body.company_id;
+    if (!grain_type || !company_id) {
+      return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'Missing: grain_type, company_id' }) };
     }
-
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ success: true, grains_tested: 5, results })
-    };
-
-  } catch (error) {
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ success: false, error: error.message })
-    };
+    const id = randomUUID();
+    const result = await pool.query(
+      'INSERT INTO settlements (id, grain_type, total_gross_kg, total_net_kg, total_waste_kg, company_id, settlement_number, settlement_date, base_price_per_ton, gross_amount, commercial_discount, commission_amount, paritarias_amount, freight_amount, net_amount, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW(),NOW()) RETURNING id, settlement_number, grain_type, total_gross_kg, company_id, status, created_at',
+      [id, grain_type, body.total_gross_kg||0, body.total_net_kg||0, body.total_waste_kg||0, company_id, body.settlement_number||('SRI-'+Date.now()), body.settlement_date||new Date().toISOString().split('T')[0], body.base_price_per_ton||0, body.gross_amount||0, body.commercial_discount||0, body.commission_amount||0, body.paritarias_amount||0, body.freight_amount||0, body.net_amount||0, 'pending']
+    );
+    return { statusCode: 201, headers, body: JSON.stringify({ success: true, data: result.rows[0] }) };
+  } catch (err) {
+    console.error('Error:', err);
+    return { statusCode: 500, headers, body: JSON.stringify({ success: false, error: err.message }) };
   }
 };
