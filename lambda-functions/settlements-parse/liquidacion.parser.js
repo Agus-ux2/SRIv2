@@ -96,7 +96,7 @@ const parseOperacion = (text) => {
 
 const parseCTGs = (text) => {
   const ctgs = [];
-  const re = /(\d{12})(FG|G[123])\s*(\d+)\s*Localidad:\s*([^\n]+?)\s*(\d{2}\.\d{2})\s*(\d{4,6})\s*\n/g;
+  const re = /(\d{12})\s*(FG|G[123])\s*(\d+)\s*Localidad:\s*([^\n]+?)\s*(\d{2}\.\d{2})\s*(\d{4,6})\s*\n/g;
   let m;
   while ((m = re.exec(text)) !== null) {
     ctgs.push({

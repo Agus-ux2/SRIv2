@@ -43,14 +43,14 @@ exports.handler = async (event) => {
         const buffer = Buffer.from(data, 'base64');
         const p      = await parseLiquidacion(buffer);
         const now    = new Date().toISOString();
-        const sid    = uuidv4();
+        let sid    = uuidv4();
 
         // Convertir fecha DD/MM/YYYY → YYYY-MM-DD
         const fechaDB = p.fecha
           ? p.fecha.split('/').reverse().join('-')
           : now.split('T')[0];
 
-        await pool.query(`
+        const sRes = await pool.query(`
           INSERT INTO settlements (
             id, settlement_number, company_id, settlement_date,
             grain_type, base_price_per_ton,
@@ -80,6 +80,7 @@ exports.handler = async (event) => {
             datos_adicionales      = EXCLUDED.datos_adicionales,
             status                 = EXCLUDED.status,
             updated_at             = EXCLUDED.updated_at
+          RETURNING id
         `, [
           sid,
           p.coe,
@@ -113,6 +114,7 @@ exports.handler = async (event) => {
           JSON.stringify(p.datos_adicionales || {}),
           now, now,
         ]);
+        sid = sRes.rows[0].id;
 
         // Insertar CTGs
         for (const ctg of (p.ctgs || [])) {
