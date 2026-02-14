@@ -345,6 +345,18 @@
     <script src="/assets/js/session.js"></script>
     <script>
         if (!Session.isAuthenticated()) window.location.href = '/auth/login.html';
+    <script src="/assets/js/api.js"></script>
+    <script src="/assets/js/session.js"></script>
+    <script>
+        if (!Session.isAuthenticated()) window.location.href = '/auth/login.html';
+
+        const user = Session.getUser();
+        if (user) {
+            document.getElementById('userName').textContent = user.name || 'Usuario';
+            document.getElementById('userCompany').textContent = user.company || 'Mi Empresa';
+            const initials = user.name ? user.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'U';
+            document.getElementById('userAvatar').textContent = initials;
+        }
 
         let currentDocType = 'CP';
 
@@ -355,118 +367,94 @@
             log.scrollTop = log.scrollHeight;
         }
 
-        async function checkStatus() {
-            try {
-                const response = await API.get('/health');
-                document.getElementById('statusDot').classList.add('connected');
-                document.getElementById('statusText').innerText = 'Servidor conectado';
-                addLog("✓ Conexión con servidor establecida");
-            } catch (error) {
-                document.getElementById('statusText').innerText = 'Servidor desconectado';
-                addLog("⚠ ERROR: Servidor no disponible");
-            }
-        }
-
         function setDocType(type) {
             currentDocType = type;
             document.getElementById('btn-cp').classList.toggle('active', type === 'CP');
             document.getElementById('btn-ced').classList.toggle('active', type === 'CED');
-            addLog(`Tipo de documento cambiado a: ${type}`);
+            addLog(`Tipo de documento: ${type}`);
+        }
+
+        async function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload  = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
         }
 
         async function handleFileUpload(input) {
             if (!input.files || input.files.length === 0) return;
 
-            const totalFiles = input.files.length;
-            addLog(`📤 Subiendo ${totalFiles} archivo(s)...`);
+            const files = Array.from(input.files);
+            addLog(`📤 Preparando ${files.length} archivo(s)...`);
 
-            document.getElementById('uText').innerText = `Procesando ${totalFiles} archivo(s)...`;
+            document.getElementById('uText').innerText = `Procesando ${files.length} archivo(s)...`;
             document.getElementById('resultsBox').style.display = 'block';
             document.getElementById('loadingIndicator').style.display = 'block';
             document.getElementById('fields').innerHTML = '';
             document.getElementById('btnConfirm').style.display = 'none';
 
-            const formData = new FormData();
-            for (let i = 0; i < input.files.length; i++) {
-                formData.append('files', input.files[i]);
-            }
-            formData.append('docType', currentDocType);
-
             try {
-                const response = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData,
-                    headers: { 'Authorization': `Bearer ${Session.getToken()}` }
-                });
+                // Convertir todos los PDFs a base64
+                const pdfs = await Promise.all(files.map(async f => ({
+                    filename: f.name,
+                    data: await fileToBase64(f)
+                })));
 
-                if (!response.ok) throw new Error('Error en la carga');
+                addLog(`✓ ${pdfs.length} archivo(s) codificados. Subiendo a S3...`);
 
-                const { taskId } = await response.json();
-                addLog(`✓ Tarea creada: ${taskId}`);
-                pollTaskStatus(taskId);
-            } catch (error) {
-                addLog("✖ ERROR: " + error.message);
+                const result = await API.post('/settlements/upload', { pdfs });
+
+                addLog(`✓ Subida completada. Batch ID: ${result.batchId}`);
+                addLog(`  ✅ Subidos: ${result.resumen.subidos} | ❌ Errores: ${result.resumen.errores}`);
+                addLog(`⏳ Los PDFs se están procesando en segundo plano...`);
+
+                showResults(result.resultados);
                 document.getElementById('loadingIndicator').style.display = 'none';
-            }
-        }
+                document.getElementById('uText').innerText = '✅ Archivos subidos correctamente';
+                document.getElementById('btnConfirm').style.display = 'block';
 
-        async function pollTaskStatus(taskId) {
-            try {
-                const response = await fetch(`/api/upload/status/${taskId}`, {
-                    headers: { 'Authorization': `Bearer ${Session.getToken()}` }
-                });
-                const task = await response.json();
-
-                if (task.status === 'completed') {
-                    addLog("✓ Análisis completado");
-                    showResults(task.results);
-                    document.getElementById('loadingIndicator').style.display = 'none';
-                    document.getElementById('btnConfirm').style.display = 'block';
-                    document.getElementById('uText').innerText = "✅ Proceso completado";
-                } else if (task.status === 'error') {
-                    addLog("✖ Error en el procesamiento");
-                    document.getElementById('loadingIndicator').style.display = 'none';
-                } else {
-                    setTimeout(() => pollTaskStatus(taskId), 1500);
-                }
             } catch (error) {
-                addLog("✖ Error al verificar estado");
+                addLog('✖ ERROR: ' + error.message);
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('uText').innerText = 'Error al subir archivos';
             }
         }
 
-        function showResults(results) {
+        function showResults(resultados) {
             const container = document.getElementById('fields');
-            container.innerHTML = '';
-
-            results.forEach(res => {
-                const block = document.createElement('div');
-                block.className = 'file-block';
-                block.innerHTML = `
-                    <div class="file-header"><strong>📄 ${res.filename}</strong></div>
-                    ${res.datos.map(d => `
+            container.innerHTML = resultados.map(r => `
+                <div class="file-block">
+                    <div class="file-header">
+                        <strong>${r.success ? '✅' : '❌'} ${r.filename}</strong>
+                    </div>
+                    ${r.success ? `
                         <div class="field-row">
-                            <span class="field-label">${d.label}</span>
-                            <span class="field-value">${d.value}</span>
+                            <span class="field-label">Key S3</span>
+                            <span class="field-value" style="font-size:0.8em;color:#64748b">${r.key}</span>
                         </div>
-                    `).join('')}
-                `;
-                container.appendChild(block);
-            });
+                        <div class="field-row">
+                            <span class="field-label">Estado</span>
+                            <span class="field-value" style="color:#00a859">Subido — procesando en segundo plano</span>
+                        </div>
+                    ` : `
+                        <div class="field-row">
+                            <span class="field-label">Error</span>
+                            <span class="field-value" style="color:#ef4444">${r.error}</span>
+                        </div>
+                    `}
+                </div>
+            `).join('');
         }
 
-        async function confirmData() {
-            alert("✓ Datos confirmados y guardados exitosamente");
-            location.reload();
+        function confirmData() {
+            window.location.href = '/dashboard/dashboard.html';
         }
 
-        // Logout
         document.getElementById('logoutLink').addEventListener('click', (e) => {
             e.preventDefault();
             if (confirm('¿Cerrar sesión?')) { Session.logout(); window.location.href = '/auth/login.html'; }
         });
-
-        checkStatus();
     </script>
 </body>
-
-</html>

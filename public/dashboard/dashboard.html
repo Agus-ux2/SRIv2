@@ -596,33 +596,69 @@
         }
 
         // Cargar datos del usuario
+    <script src="/assets/js/api.js"></script>
+    <script src="/assets/js/session.js"></script>
+    <script>
+        if (!Session.isAuthenticated()) window.location.href = '/auth/login.html';
+
         const user = Session.getUser();
         if (user) {
             document.getElementById('userName').textContent = user.name || 'Usuario';
             document.getElementById('userCompany').textContent = user.company || 'Mi Empresa';
-
-            // Avatar con iniciales
-            const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U';
+            const initials = user.name ? user.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'U';
             document.getElementById('userAvatar').textContent = initials;
         }
 
-        // Logout desde botón del sidebar
         document.getElementById('logoutLink').addEventListener('click', (e) => {
             e.preventDefault();
-            if (confirm('¿Está seguro que desea cerrar sesión?')) {
-                Session.logout();
-                window.location.href = '/auth/login.html';
-            }
+            if (confirm('¿Cerrar sesión?')) { Session.logout(); window.location.href = '/auth/login.html'; }
+        });
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            if (confirm('¿Cerrar sesión?')) { Session.logout(); window.location.href = '/auth/login.html'; }
         });
 
-        // Logout desde botón del perfil
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            if (confirm('¿Está seguro que desea cerrar sesión?')) {
-                Session.logout();
-                window.location.href = '/auth/login.html';
+        function formatDate(str) {
+            if (!str) return '---';
+            return new Date(str).toLocaleDateString('es-AR');
+        }
+
+        function statusPill(status) {
+            const map = {
+                'procesada': '<span class="status-ok">✓ Procesada</span>',
+                'pending':   '<span style="color:#f59e0b;font-weight:700">⏳ Pendiente</span>',
+                'error':     '<span style="color:#ef4444;font-weight:700">✗ Error</span>',
+            };
+            return map[status] || `<span>${status}</span>`;
+        }
+
+        async function loadSettlements() {
+            const tbody = document.getElementById('activityTableBody');
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8">Cargando...</td></tr>';
+
+            try {
+                const res = await API.get('/settlements?limit=10');
+                const settlements = res.data || [];
+
+                if (!settlements.length) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8">No hay liquidaciones cargadas aún</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = settlements.map(s => `
+                    <tr style="cursor:pointer" onclick="window.location='/dashboard/settlement.html?id=${s.id}'">
+                        <td>${formatDate(s.settlement_date || s.created_at)}</td>
+                        <td><span class="doc-pill doc-cp">Liquidación</span></td>
+                        <td>${s.coe || s.settlement_number || '---'}</td>
+                        <td>${s.grano_tipo || s.grain_type || '---'}</td>
+                        <td>${statusPill(s.status)}</td>
+                    </tr>
+                `).join('');
+
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#ef4444">Error al cargar: ${err.message}</td></tr>`;
             }
-        });
+        }
+
+        loadSettlements();
     </script>
 </body>
-
-</html>
