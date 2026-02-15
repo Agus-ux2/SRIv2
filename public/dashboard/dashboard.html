@@ -636,7 +636,7 @@
             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8">Cargando...</td></tr>';
 
             try {
-                const res = await API.get('/settlements?limit=10');
+                const res = await API.get('/settlements/?limit=10');
                 const settlements = res.data || [];
 
                 if (!settlements.length) {
